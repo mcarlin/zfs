@@ -69,6 +69,7 @@
 
 #include <libzfs.h>
 #include <libzutil.h>
+#include <libzfs_api.h>
 
 #include "zpool_util.h"
 #include "zfs_comutil.h"
@@ -1653,30 +1654,23 @@ zpool_do_destroy(int argc, char **argv)
 
 	pool = argv[0];
 
-	if ((zhp = zpool_open_canfail(g_zfs, pool)) == NULL) {
-		/*
-		 * As a special case, check for use of '/' in the name, and
-		 * direct the user to use 'zfs destroy' instead.
-		 */
-		if (strchr(pool, '/') != NULL)
-			(void) fprintf(stderr, gettext("use 'zfs destroy' to "
-			    "destroy a dataset\n"));
-		return (1);
-	}
-
-	if (zpool_disable_datasets(zhp, force) != 0) {
-		(void) fprintf(stderr, gettext("could not destroy '%s': "
-		    "could not unmount datasets\n"), zpool_get_name(zhp));
-		zpool_close(zhp);
-		return (1);
-	}
-
 	/* The history must be logged as part of the export */
 	log_history = B_FALSE;
 
-	ret = (zpool_destroy(zhp, history_str) != 0);
+	ret = lza_pool_destroy(pool, history_str, force);
+	if (ret != EZFS_SUCCESS) {
 
-	zpool_close(zhp);
+		if (strchr(pool, '/') != NULL) {
+			(void) fprintf(stderr, gettext("use 'zfs destroy' to "
+				"destroy a dataset\n"));
+			return (1);
+		}
+
+		// TODO: not completely equivalent output, but illustrates the point of the example
+		(void) fprintf(stderr, gettext("cannot destroy %s: %s\n"),
+			pool,
+			libzfs_error_description_raw(ret));	
+	}
 
 	return (ret);
 }
@@ -9908,6 +9902,11 @@ main(int argc, char **argv)
 	if ((strcmp(cmdname, "-V") == 0) || (strcmp(cmdname, "--version") == 0))
 		return (zpool_do_version(argc, argv));
 
+	if (libzfs_api_init() != 0) {
+		(void) fprintf(stderr, "%s", libzfs_error_init(errno));
+		return (1);
+	}
+
 	if ((g_zfs = libzfs_init()) == NULL) {
 		(void) fprintf(stderr, "%s\n", libzfs_error_init(errno));
 		return (1);
@@ -9967,6 +9966,8 @@ main(int argc, char **argv)
 		(void) zpool_log_history(g_zfs, history_str);
 
 	libzfs_fini(g_zfs);
+
+	libzfs_api_fini();
 
 	/*
 	 * The 'ZFS_ABORT' environment variable causes us to dump core on exit

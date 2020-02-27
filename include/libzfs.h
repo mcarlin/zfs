@@ -216,6 +216,7 @@ extern int libzfs_errno(libzfs_handle_t *);
 extern const char *libzfs_error_init(int);
 extern const char *libzfs_error_action(libzfs_handle_t *);
 extern const char *libzfs_error_description(libzfs_handle_t *);
+extern const char *libzfs_error_description_raw(zfs_error_t err);
 extern int zfs_standard_error(libzfs_handle_t *, int, const char *);
 extern void libzfs_mnttab_init(libzfs_handle_t *);
 extern void libzfs_mnttab_fini(libzfs_handle_t *);

@@ -69,12 +69,9 @@ libzfs_error_action(libzfs_handle_t *hdl)
 }
 
 const char *
-libzfs_error_description(libzfs_handle_t *hdl)
+libzfs_error_description_raw(zfs_error_t err) // TODO: better naming...
 {
-	if (hdl->libzfs_desc[0] != '\0')
-		return (hdl->libzfs_desc);
-
-	switch (hdl->libzfs_error) {
+	switch (err) {
 	case EZFS_NOMEM:
 		return (dgettext(TEXT_DOMAIN, "out of memory"));
 	case EZFS_BADPROP:
@@ -283,9 +280,18 @@ libzfs_error_description(libzfs_handle_t *hdl)
 	case EZFS_UNKNOWN:
 		return (dgettext(TEXT_DOMAIN, "unknown error"));
 	default:
-		assert(hdl->libzfs_error == 0);
+		assert(err == 0);
 		return (dgettext(TEXT_DOMAIN, "no error"));
 	}
+}
+
+const char *
+libzfs_error_description(libzfs_handle_t *hdl)
+{
+	if (hdl->libzfs_desc[0] != '\0')
+		return (hdl->libzfs_desc);
+
+	return libzfs_error_description_raw(hdl->libzfs_error);
 }
 
 /*PRINTFLIKE2*/

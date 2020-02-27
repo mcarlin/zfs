@@ -1378,33 +1378,45 @@ create_failed:
 int
 zpool_destroy(zpool_handle_t *zhp, const char *log_str)
 {
+	int ret = EZFS_SUCCESS;
 	zfs_cmd_t zc = {"\0"};
 	zfs_handle_t *zfp = NULL;
 	libzfs_handle_t *hdl = zhp->zpool_hdl;
-	char msg[1024];
 
 	if (zhp->zpool_state == POOL_STATE_ACTIVE &&
 	    (zfp = zfs_open(hdl, zhp->zpool_name, ZFS_TYPE_FILESYSTEM)) == NULL)
-		return (-1);
+		return (EZFS_OPENFAILED);
 
 	(void) strlcpy(zc.zc_name, zhp->zpool_name, sizeof (zc.zc_name));
 	zc.zc_history = (uint64_t)(uintptr_t)log_str;
 
 	if (zfs_ioctl(hdl, ZFS_IOC_POOL_DESTROY, &zc) != 0) {
-		(void) snprintf(msg, sizeof (msg), dgettext(TEXT_DOMAIN,
-		    "cannot destroy '%s'"), zhp->zpool_name);
-
-		if (errno == EROFS) {
-			zfs_error_aux(hdl, dgettext(TEXT_DOMAIN,
-			    "one or more devices is read only"));
-			(void) zfs_error(hdl, EZFS_BADDEV, msg);
-		} else {
-			(void) zpool_standard_error(hdl, errno, msg);
+		switch (errno) {
+			case EROFS:
+				ret = EZFS_POOLREADONLY;
+				break;
+			case ENOENT:
+				ret = EZFS_NOENT;
+				break;
+			case ZFS_ERR_EXPORT_IN_PROGRESS:
+				ret = EZFS_EXPORT_IN_PROGRESS;
+				break;
+			case EBUSY:
+				ret = EZFS_BUSY;
+				break;
+			case EXDEV:
+				ret = EZFS_ACTIVE_SPARE;
+				break;
+			default:
+				ret = EZFS_UNKNOWN;
+				break;
 		}
 
-		if (zfp)
+		if (zfp) {
 			zfs_close(zfp);
-		return (-1);
+		}
+
+		return (ret);
 	}
 
 	if (zfp) {
@@ -1412,8 +1424,9 @@ zpool_destroy(zpool_handle_t *zhp, const char *log_str)
 		zfs_close(zfp);
 	}
 
-	return (0);
+	return (ret);
 }
+
 
 /*
  * Create a checkpoint in the given pool.
